@@ -11,11 +11,13 @@
 import 'core-js/stable';
 import 'regenerator-runtime/runtime';
 import path from 'path';
+import { createWriteStream } from 'fs';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import { on } from '../util';
 
 export default class AppUpdater {
   constructor() {
@@ -26,12 +28,6 @@ export default class AppUpdater {
 }
 
 let mainWindow: BrowserWindow | null = null;
-
-ipcMain.on('ipc-example', async (event, arg) => {
-  const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
-  event.reply('ipc-example', msgTemplate('pong'));
-});
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -78,6 +74,7 @@ const createWindow = async () => {
     icon: getAssetPath('icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      webviewTag: true,
     },
   });
 
@@ -135,3 +132,50 @@ app
     });
   })
   .catch(console.log);
+
+ipcMain.handle('test', (e) => {
+  console.log(e);
+});
+
+const loadingFileSet = new Map<string, boolean>();
+// handle file register
+ipcMain.handle('register-file', (e, data) => {
+  const { name, lastModified, id } = data as {
+    name: string;
+    lastModified: number;
+    id: string;
+  };
+
+  if (loadingFileSet.has(`${name}-${lastModified}`)) {
+    return { reason: 'duplicate', code: 1 };
+  } else if (ipcMain.listeners.length > ipcMain.getMaxListeners()) {
+    return { reason: 'too many file unload in parrell', code: 2 };
+  }
+  const filePath = path.resolve('./', name);
+  const stream = createWriteStream(filePath);
+
+  loadingFileSet.set(`${name}-${lastModified}}`, true);
+  let chunkIndex = 0;
+  mainWindow!.webContents.send(`${id}-requestContent`, chunkIndex++);
+
+  // listen sendContent event;
+  const off = on(`${id}-sendContent`, ipcMain, (e, data) => {
+    const { chunk, finished } = data as {
+      chunk: string;
+      finished: boolean;
+    };
+    stream.write(chunk, (err) => {
+      if (err) {
+        mainWindow!.webContents.send(`${id}-error`, err);
+      } else if (finished) {
+        off();
+        loadingFileSet.delete(id);
+        stream.close();
+        mainWindow!.webContents.send(`${id}-success`);
+      } else {
+        mainWindow!.webContents.send(`${id}-requestContent`, chunkIndex++);
+      }
+    });
+  });
+  return { id, path: filePath };
+});

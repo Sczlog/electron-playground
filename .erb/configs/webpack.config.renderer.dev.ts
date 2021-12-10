@@ -37,7 +37,7 @@ if (
   execSync('npm run postinstall');
 }
 
-export default merge(baseConfig, {
+export default merge<Record<string, any>>(baseConfig, {
   devtool: 'inline-source-map',
 
   mode: 'development',

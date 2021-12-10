@@ -1,23 +1,25 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const { randomUUID } = require('crypto');
 
 contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
-    myPing() {
-      ipcRenderer.send('ipc-example', 'ping');
+    on(...args) {
+      return ipcRenderer.on(...args);
     },
-    on(channel, func) {
-      const validChannels = ['ipc-example'];
-      if (validChannels.includes(channel)) {
-        // Deliberately strip event as it includes `sender`
-        ipcRenderer.on(channel, (event, ...args) => func(...args));
-      }
+    once(...args) {
+      return ipcRenderer.once(...args);
     },
-    once(channel, func) {
-      const validChannels = ['ipc-example'];
-      if (validChannels.includes(channel)) {
-        // Deliberately strip event as it includes `sender`
-        ipcRenderer.once(channel, (event, ...args) => func(...args));
-      }
+    send(...args) {
+      return ipcRenderer.send(...args);
     },
+    off(...args) {
+      return ipcRenderer.off(...args);
+    },
+    invoke(...args) {
+      return ipcRenderer.invoke(...args);
+    },
+  },
+  uuid: () => {
+    return randomUUID();
   },
 });

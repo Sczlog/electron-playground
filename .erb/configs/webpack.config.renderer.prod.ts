@@ -25,7 +25,7 @@ const devtoolsConfig =
       }
     : {};
 
-export default merge(baseConfig, {
+export default merge<Record<string,any>>(baseConfig, {
   ...devtoolsConfig,
 
   mode: 'production',
